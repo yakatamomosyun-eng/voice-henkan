@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ボイス変換</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Zen+Kaku+Gothic+Antique:wght@500;700&display=swap">
+<style>
+/* layout: top bar, four equal windows (2x2 on PC, stacked on phones), folded settings at the bottom */
+:root{
+  --bg:#f3f5f4;--panel:#ffffff;--ink:#1d2622;--muted:#5d6b65;--line:#d3dbd7;
+  --accent:#1f6b5a;--accent-ink:#ffffff;--accent-soft:#e1efea;
+  --rec:#c2410c;--rec-soft:#fbe7dc;--wait:#2f5f9e;--wait-soft:#e2ebf7;--warn:#9a3412;
+  --f-display:"Zen Kaku Gothic Antique","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+  --f-body:"BIZ UDPGothic","Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141a18;--panel:#1c2421;--ink:#e4ebe8;--muted:#9aa9a2;--line:#33403b;
+  --accent:#4fb39a;--accent-ink:#0f1513;--accent-soft:#1e3a33;
+  --rec:#fb8a55;--rec-soft:#3d2418;--wait:#7aa7e6;--wait-soft:#1d2b40;--warn:#fdba8c;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141a18;--panel:#1c2421;--ink:#e4ebe8;--muted:#9aa9a2;--line:#33403b;
+  --accent:#4fb39a;--accent-ink:#0f1513;--accent-soft:#1e3a33;
+  --rec:#fb8a55;--rec-soft:#3d2418;--wait:#7aa7e6;--wait-soft:#1d2b40;--warn:#fdba8c;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6;margin:0;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:8px 12px;font-weight:700;min-height:40px}
+button:hover{border-color:var(--accent)}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.main{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.rec{background:var(--rec);color:var(--accent-ink);border-color:var(--rec)}
+button.danger{color:var(--warn)}
+button.small{min-height:32px;padding:4px 10px;font-size:13px}
+button:disabled{opacity:.5;cursor:default}
+select,input[type=text]{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-height:36px}
+label.chk{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding-block:8px;padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px));background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{font-family:var(--f-display);font-weight:700;font-size:19px;display:flex;align-items:baseline;gap:8px}
+.ver{font-family:var(--f-body);font-size:12px;font-weight:700;color:var(--accent);background:var(--accent-soft);padding:2px 8px;border-radius:999px;font-variant-numeric:tabular-nums}
+.lamp{display:inline-flex;align-items:center;gap:8px;padding:4px 12px;border-radius:999px;font-weight:700;font-size:13px;background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.lamp i{width:10px;height:10px;border-radius:50%;background:var(--muted)}
+.lamp[data-s="standby"]{background:var(--wait-soft);color:var(--wait);border-color:transparent}
+.lamp[data-s="standby"] i{background:var(--wait)}
+.lamp[data-s="writing"]{background:var(--rec-soft);color:var(--rec);border-color:transparent}
+.lamp[data-s="writing"] i{background:var(--rec);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.3}}
+@media (prefers-reduced-motion:reduce){.lamp i{animation:none!important}}
+.topic{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.grid{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:minmax(0,1fr) minmax(0,1fr);gap:10px;padding-top:10px;padding-bottom:10px;padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px))}
+.win{min-width:0;min-height:0;display:flex;flex-direction:column;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px}
+.win h2{margin:0;font-family:var(--f-display);font-size:15px;display:flex;justify-content:space-between;align-items:baseline;gap:4px 10px;flex-wrap:wrap}
+.win h2 small{font-family:var(--f-body);font-weight:400;font-size:12px;color:var(--muted)}
+.wtools{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.wtools .push{margin-left:auto}
+textarea{flex:1 1 auto;min-height:0;width:100%;resize:none;border:1px solid var(--line);border-radius:6px;padding:10px;background:var(--bg);color:var(--ink);font-size:16px;line-height:1.8}
+#removed{flex:1 1 auto;min-height:0;overflow:auto;white-space:pre-wrap;border:1px solid var(--line);border-radius:6px;padding:10px;background:var(--bg);line-height:1.8;font-size:16px;overflow-wrap:anywhere}
+mark.rm{background:var(--rec-soft);color:var(--rec);text-decoration:line-through;border-radius:3px}
+mark.rp{background:var(--accent-soft);color:var(--accent);border-radius:3px;font-weight:700}
+.tabs2{display:flex;gap:4px}
+.tabs2 button{border-radius:6px 6px 0 0;border-bottom:3px solid transparent}
+.tabs2 button[aria-selected="true"]{border-bottom-color:var(--accent);color:var(--accent)}
+.pmemo{flex:0 0 auto;min-height:0;height:4.5em}
+.prow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.prow label{font-size:13px;color:var(--muted);font-weight:700}
+.heard{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.heard b{color:var(--ink);font-weight:400}
+.foot{padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px));padding-block:4px}
+.note{margin-top:4px;padding:8px 12px;border-radius:8px;background:var(--wait-soft);font-size:14px}
+.note.bad{background:var(--rec-soft)}
+.settings{background:var(--panel);border-top:1px solid var(--line);padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px))}
+.settings summary{cursor:pointer;font-weight:700;padding-block:8px;list-style-position:inside}
+.settings-body{max-height:42dvh;overflow:auto;padding-bottom:12px}
+.settings h3{font-family:var(--f-display);font-size:15px;margin:16px 0 4px}
+.settings p{margin:0 0 8px;color:var(--muted);font-size:14px;max-width:70ch}
+.addrow{display:flex;flex-wrap:wrap;gap:8px;margin-block:8px;padding:10px;background:var(--accent-soft);border-radius:8px;align-items:center}
+.addrow input[type=text]{flex:1 1 140px;min-width:0}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:560px}
+th,td{text-align:left;padding:6px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:12px;color:var(--muted);font-weight:700}
+td input[type=text],td select{width:100%}
+.io{display:grid;gap:8px;margin-block:8px}
+.io textarea{min-height:110px;font-size:13px;flex:none}
+.guide{margin:0;padding-left:1.4em;max-width:70ch}
+.guide li{margin-block:4px}
+kbd{font-family:var(--f-body);background:var(--accent-soft);padding:0 6px;border-radius:4px}
+@media (max-width:760px){
+  body{height:auto;min-height:100dvh;overflow:visible}
+  .grid{flex:none;grid-template-columns:1fr;grid-template-rows:none}
+  .win{min-height:340px}
+  textarea,#removed{min-height:200px}
+  .settings-body{max-height:none}
+  .topic{margin-left:0}
+}
+</style>
+
+</head>
+<body>
+<header class="top">
+  <div class="brand">ボイス変換 <span class="ver" id="ver">v0.3.0</span></div>
+  <span class="lamp" id="lamp" data-s="off"><i></i><span id="lampText">マイク オフ</span></span>
+  <button id="btnMic" class="main" type="button">マイクを入れる</button>
+  <button id="btnWrite" type="button">書き取り開始</button>
+  <label class="topic" for="topicSel">話題 <select id="topicSel"></select></label>
+</header>
+
+<main class="grid">
+  <section class="win">
+    <h2>原文 <small>話したそのまま。1回話すごとに改行</small></h2>
+    <div class="wtools">
+      <button id="btnBack" class="small" type="button">戻す</button>
+      <button id="btnRedo" class="small" type="button">やり直す</button>
+      <button id="btnUndo" class="small" type="button">最後の一文を消す</button>
+      <button id="btnClear" class="small danger" type="button">全部消す</button>
+      <button id="btnCopyOrig" class="small push" type="button">コピー</button>
+    </div>
+    <textarea id="orig" aria-label="原文" placeholder="ここに話した内容が出ます。貼り付けや手入力もできます。"></textarea>
+  </section>
+
+  <section class="win">
+    <h2>整理版 <small id="sumText"></small></h2>
+    <div class="wtools">
+      <div class="tabs2" role="tablist">
+        <button role="tab" id="tabClean" class="small" aria-selected="true" type="button">整理版</button>
+        <button role="tab" id="tabRemoved" class="small" aria-selected="false" type="button">消したところ</button>
+      </div>
+      <button id="btnRebuild" class="small" type="button" hidden>整理版を作り直す</button>
+      <button id="btnCopyClean" class="small main push" type="button">コピー</button>
+    </div>
+    <textarea id="clean" aria-label="整理版"></textarea>
+    <div id="removed" hidden></div>
+  </section>
+
+  <section class="win">
+    <h2>要点メモ <small>整理版を1行ずつ並べたもの</small></h2>
+    <div class="wtools">
+      <button id="btnCopyPoints" class="small main push" type="button">コピー</button>
+    </div>
+    <textarea id="points" aria-label="要点メモ"></textarea>
+  </section>
+
+  <section class="win">
+    <h2>プロンプト <small>他のアプリへ渡す依頼文</small></h2>
+    <div class="prow">
+      <label for="pTarget">渡す先</label>
+      <select id="pTarget">
+        <option value="Claude">Claude</option>
+        <option value="ChatGPT">ChatGPT</option>
+        <option value="Gemini">Gemini</option>
+        <option value="Claude Code">Claude Code</option>
+        <option value="other">その他</option>
+      </select>
+      <input type="text" id="pOther" placeholder="アプリの名前" aria-label="その他のアプリの名前" hidden>
+      <label for="pMode">作り方</label>
+      <select id="pMode">
+        <option value="a">要点を整理してもらう</option>
+        <option value="b">要点をそのまま依頼文に</option>
+      </select>
+      <button id="btnCopyPrompt" class="small main push" type="button">依頼文をコピー</button>
+    </div>
+    <textarea id="pMemo" class="pmemo" aria-label="話題メモ" placeholder="話題メモ（今作っているものの説明など。話題ごとに覚えます）"></textarea>
+    <textarea id="pOut" aria-label="依頼文"></textarea>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="heard">聞こえた言葉：<b id="heardText">（まだありません）</b></div>
+  <div class="note" id="msg" role="status" hidden></div>
+</footer>
+
+<details class="settings" id="settings">
+  <summary>設定（辞書・声の合図・消す言葉・書き出し・使い方）</summary>
+  <div class="settings-body">
+    <label class="chk"><input type="checkbox" id="optAuto"> 自動で整える（オフのときは「整理版を作り直す」を押します）</label>
+
+    <h3>用語辞書</h3>
+    <p>「まちがい」に話したときに出る言葉、「正しい言葉」に直したい表記を入れます。まちがいは「、」で区切って何個でも書けます。話題を入れた言葉は、その話題を選んだときだけ置き換えます。</p>
+    <div class="addrow">
+      <input type="text" id="dW" placeholder="まちがい（例：突き出し）" aria-label="まちがい">
+      <input type="text" id="dR" placeholder="正しい言葉（例：付きだし）" aria-label="正しい言葉">
+      <select id="dC" aria-label="分類"></select>
+      <input type="text" id="dT" placeholder="話題（空欄＝いつも）" aria-label="話題">
+      <button id="dAdd" class="main small" type="button">追加</button>
+    </div>
+    <div class="tbl"><table><thead><tr><th>まちがい</th><th>正しい言葉</th><th>分類</th><th>話題</th><th></th></tr></thead><tbody id="dictBody"></tbody></table></div>
+
+    <h3>声の合図</h3>
+    <p>マイクを入れている間、ここに登録した言葉を言うと動作します。合図の言葉は原文に書きません。</p>
+    <div class="addrow">
+      <input type="text" id="cP" placeholder="言葉（例：書き取り終了）" aria-label="言葉">
+      <select id="cA" aria-label="動作"></select>
+      <button id="cAdd" class="main small" type="button">追加</button>
+    </div>
+    <div class="tbl"><table><thead><tr><th>言葉</th><th>動作</th><th></th></tr></thead><tbody id="cmdBody"></tbody></table></div>
+
+    <h3>消す言葉</h3>
+    <p>整理版を作るときに消す言葉です。「区切りがなくても消す」をオフの言葉は、後ろに「、」や区切りがあるときだけ消します（「そのため」「あの店」などを消さないため）。</p>
+    <div class="addrow">
+      <input type="text" id="fW" placeholder="消す言葉（例：ええっと）" aria-label="消す言葉">
+      <label class="chk" for="fAny"><input type="checkbox" id="fAny"> 区切りがなくても消す</label>
+      <button id="fAdd" class="main small" type="button">追加</button>
+    </div>
+    <div class="tbl"><table><thead><tr><th>消す言葉</th><th>区切りがなくても消す</th><th></th></tr></thead><tbody id="fillBody"></tbody></table></div>
+
+    <h3>書き出し・読み込み</h3>
+    <p>辞書・声の合図・消す言葉・話題メモは、このブラウザの中に自動で保存されます。別の端末へ移すときは、ここで書き出して移した先で読み込みます。読み込みは今の中身に足すだけで、何も消しません。</p>
+    <div class="wtools">
+      <button id="xFile" class="main small" type="button">ファイルに書き出す</button>
+      <button id="xCopy" class="small" type="button">書き出し内容をコピー</button>
+      <label class="small" for="iFile" style="font-size:13px">ファイルから読み込む <input type="file" id="iFile" accept=".json,application/json,text/plain"></label>
+    </div>
+    <div class="io">
+      <textarea id="ioText" aria-label="書き出し・読み込みの内容" placeholder="書き出した内容がここに出ます。読み込むときは、ここに貼り付けて「貼り付けた内容を読み込む」を押します。"></textarea>
+      <div class="wtools"><button id="iPaste" class="small" type="button">貼り付けた内容を読み込む</button></div>
+    </div>
+
+    <h3>使い方</h3>
+    <ol class="guide">
+      <li>パソコンの Chrome で開き、<kbd>マイクを入れる</kbd>を押します。初回はマイクの使用を「許可」してください。</li>
+      <li>「待機中」になったら、「開始」と言うと書き取りを始め、「以上」と言うと待機に戻ります。マイクは入ったままなので、別の画面を見ながら使えます。</li>
+      <li>原文は話した言葉が1回ごとに改行で入ります。整理版は、言い淀みを消して文章に整えたものです。「消したところ」タブで、消した言葉と言い換えた言葉を色で確かめられます。</li>
+      <li>間違えたら<kbd>戻す</kbd>、戻しすぎたら<kbd>やり直す</kbd>。声で「戻して」と言っても戻せます。</li>
+      <li>プロンプトは、渡す先を選んで<kbd>依頼文をコピー</kbd>を押し、Claude などのチャットに貼ります。アプリから直接は送りません。</li>
+      <li>スマホや Claude の画面の中では、マイクボタンが動かないことがあります。その場合はキーボードのマイクで原文に入力するか、文章を貼り付けてください。</li>
+      <li>声で本人を見分けることはできないため、周りの人の声も拾います。話した声は Chrome の音声認識（Google）に送られて文字になります。</li>
+    </ol>
+  </div>
+</details>
+
+<script>
+(function(){
+const VERSION='v0.3.0';
+const KEY='voice-henkan-data';
+const CATS=['店名','人名','取引先','業界用語','よくある誤変換'];
+const ACTIONS={start:'書き取り開始',stop:'書き取り停止',newline:'改行',undo:'最後の一文を消す',back:'戻す',redo:'やり直す',clean:'整える',copy:'整理版をコピー',prompt:'プロンプト依頼文をコピー'};
+const FILL_ANY=['えーっと','えっと','えーと','ええと','うーん','あのー','えー','えへん','ごほん','ゴホッ','ゴホン','ゲホ','ケホ','くしゅん','はくしょん','ハクション','ハークション','ふぅ','ふー'];
+const FILL_WORD=['あの','まあ','なんか','その'];
+const CMD_DEFAULT=[{p:'開始',a:'start'},{p:'以上',a:'stop'},{p:'改行',a:'newline'},{p:'今のは消して',a:'undo'},{p:'整理して',a:'clean'},{p:'プロンプトにして',a:'prompt'},{p:'戻して',a:'back'},{p:'やり直して',a:'redo'}];
+const DEFAULTS={
+  dict:[
+    {w:'突き出し、突出し',r:'付きだし',c:'業界用語',t:''},
+    {w:'適応',r:'摘要',c:'よくある誤変換',t:'会計'},
+    {w:'うまいもんや福田店、うまいもん屋福田店、旨いもん家福田店、うまいもんや 福田店',r:'うまいもん家 福田店',c:'店名',t:''}
+  ],
+  cmds:CMD_DEFAULT,
+  fillers:FILL_ANY.map(w=>({w:w,any:true})).concat(FILL_WORD.map(w=>({w:w,any:false}))),
+  topic:'',auto:true,target:'Claude',other:'',pmode:'a',memos:{}
+};
+const $=id=>document.getElementById(id);
+const clone=x=>JSON.parse(JSON.stringify(x));
+$('ver').textContent=VERSION;
+
+function norm(s){return String(s||'').replace(/[\s　]+/g,'').replace(/^[、。，,！？!?]+|[、。，,！？!?]+$/g,'')}
+function load(){
+  let d=null;
+  try{d=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){d=null}
+  const base=clone(DEFAULTS);
+  if(!d||typeof d!=='object')return base;
+  for(const k of Object.keys(base)){if(d[k]===undefined)d[k]=base[k]}
+  if(!d.v3){
+    for(const f of base.fillers){if(!d.fillers.some(x=>x.w===f.w))d.fillers.push(f)}
+    for(const c of base.cmds){if(!d.cmds.some(x=>norm(x.p)===c.p))d.cmds.push(c)}
+    d.v3=true;
+  }
+  return d;
+}
+let data=load();
+function save(){try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){}}
+function say(text,bad){const m=$('msg');m.textContent=text;m.classList.toggle('bad',!!bad);m.hidden=!text;clearTimeout(say.t);if(text&&!bad)say.t=setTimeout(()=>{m.hidden=true},6000)}
+function esc(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function splitWrong(w){return String(w||'').split(/[、,，]/).map(s=>s.trim()).filter(Boolean)}
+function replacePairs(){
+  const pairs=[];
+  for(const d of data.dict){
+    if(d.t&&d.t!==(data.topic||''))continue;
+    for(const w of splitWrong(d.w)){if(w!==d.r)pairs.push({w:w,r:d.r})}
+  }
+  return pairs.sort((a,b)=>b.w.length-a.w.length);
+}
+
+function cleanText(src){
+  let s=String(src||'').replace(/[ 　\t]+/g,' ');
+  const fl=data.fillers.filter(f=>f.w).slice().sort((a,b)=>b.w.length-a.w.length);
+  const dedupe=()=>{s=s.replace(/([^\s、。，,\n]{2,8})(?:[、，,\s]+\1)+(?=[、，,\s。！？\n]|$)/g,'$1')};
+  dedupe();
+  for(const f of fl){
+    if(f.any){s=s.replace(new RegExp(esc(f.w)+'ー*[、，,\\s]*','g'),'')}
+    else{s=s.replace(new RegExp('(^|[、，,\\s。！？\\n])'+esc(f.w)+'ー*(?=[、，,\\s。！？\\n]|$)[、，,\\s]*','g'),'$1')}
+  }
+  dedupe();
+  const pairs=replacePairs();
+  if(pairs.length){
+    const map=new Map(pairs.map(p=>[p.w,p.r]));
+    s=s.replace(new RegExp(pairs.map(p=>esc(p.w)).join('|'),'g'),m=>map.get(m));
+  }
+  s=s.replace(/[、，,]{2,}/g,'、').replace(/[、，,]+([。！？])/g,'$1');
+  const lines=s.split('\n').map(l=>l.replace(/^[、，,\s]+|\s+$/g,'')).filter(l=>l.replace(/[、，,。！？!?\s]/g,'').length>=2);
+  let t=lines.map(l=>/[。！？!?]$/.test(l)?l:l+'。').join('\n');
+  t=t.replace(/(この|その|あの|これ|それ|どの|の|を|に|が|は|と|で|も)。\n?/g,'$1');
+  t=t.replace(/。{2,}/g,'。');
+  return t.trim();
+}
+
+function markRemoved(src){
+  const words=[];
+  for(const f of data.fillers.filter(f=>f.w))words.push({w:f.w,k:'rm'});
+  for(const p of replacePairs())words.push({w:p.w,k:'rp'});
+  const kinds=new Map(words.map(x=>[x.w,x.k]));
+  const counts=new Map();
+  let html='';
+  if(words.length){
+    const sorted=words.slice().sort((a,b)=>b.w.length-a.w.length);
+    const re=new RegExp(sorted.map(x=>esc(x.w)).join('|'),'g');
+    let last=0,m;
+    while((m=re.exec(src))){
+      html+=escH(src.slice(last,m.index));
+      html+='<mark class="'+kinds.get(m[0])+'">'+escH(m[0])+'</mark>';
+      last=re.lastIndex;
+      counts.set(m[0],(counts.get(m[0])||0)+1);
+    }
+    html+=escH(src.slice(last));
+  }else html=escH(src);
+  let rmN=0,rpN=0;const rmL=[],rpL=[];
+  for(const [w,c] of counts){
+    if(kinds.get(w)==='rm'){rmN+=c;rmL.push(w+'×'+c)}
+    else{rpN+=c;const p=replacePairs().find(x=>x.w===w);rpL.push(w+'→'+(p?p.r:'')+'×'+c)}
+  }
+  const summary='消した言葉 '+rmN+'個'+(rmL.length?'（'+rmL.join('、')+'）':'')+'　言い換え '+rpN+'個'+(rpL.length?'（'+rpL.join('、')+'）':'');
+  return {html:html,summary:summary};
+}
+
+function points(text){return String(text||'').split(/[。！？!?\n]+/).map(x=>x.replace(/^[、，,\s]+|[、，,\s]+$/g,'')).filter(Boolean)}
+function targetName(){return data.target==='other'?(data.other||'相手のアプリ'):data.target}
+function memoKey(){return data.topic||'なし'}
+function buildPrompt(){
+  const pts=points($('clean').value);
+  const memo=(data.memos[memoKey()]||'').trim();
+  const pre=[];
+  if(data.topic)pre.push('話題：'+data.topic);
+  if(memo)pre.push(memo);
+  const list=pts.length?pts.map(x=>'- '+x).join('\n'):'- （まだ話した内容がありません）';
+  let out;
+  if(data.pmode==='b'){
+    out='# 目的\n次の内容について対応してください。\n\n'+(pre.length?'# 前提\n'+pre.join('\n')+'\n\n':'')+'# 内容\n'+list;
+  }else{
+    out='次の話の要点を整理して、'+targetName()+' にそのまま貼れるプロンプトを作ってください。\n\n'+(pre.length?'# 前提（話題メモ）\n'+pre.join('\n')+'\n\n':'')+'# 話した内容（要点メモ）\n'+list+'\n\n# 作ってほしいプロンプトの形\n・見出し：目的／前提／やってほしいこと／条件／出力の形\n・話した内容にないことは付け足さない\n・足りない情報があれば、最後に確認の質問として並べる';
+  }
+  $('pOut').value=out;
+}
+
+function refresh(){
+  const src=$('orig').value;
+  $('clean').value=cleanText(src);
+  const mk=markRemoved(src);
+  $('removed').innerHTML=mk.html;
+  $('sumText').textContent=mk.summary;
+  $('points').value=points($('clean').value).map(x=>'・'+x).join('\n');
+  buildPrompt();
+}
+function sync(){if(data.auto)refresh()}
+
+let hist=[$('orig').value],hpos=0,recT=null;
+function recordNow(){
+  clearTimeout(recT);recT=null;
+  const cur=$('orig').value;
+  if(hist[hpos]===cur)return;
+  hist=hist.slice(0,hpos+1);hist.push(cur);
+  if(hist.length>300)hist.shift();
+  hpos=hist.length-1;
+}
+function setOrig(v){recordNow();$('orig').value=v;recordNow();sync()}
+function undo(){
+  recordNow();
+  if(hpos>0){hpos--;$('orig').value=hist[hpos];sync();say('戻しました。')}
+  else say('これより前には戻せません。',true);
+}
+function redo(){
+  recordNow();
+  if(hpos<hist.length-1){hpos++;$('orig').value=hist[hpos];sync();say('やり直しました。')}
+  else say('やり直せるものがありません。',true);
+}
+function appendText(t){
+  const cur=$('orig').value;
+  const sep=cur&&!cur.endsWith('\n')?'\n':'';
+  setOrig(cur+sep+t);
+}
+function removeLast(){
+  const cur=$('orig').value.replace(/\n+$/,'');
+  if(!cur){say('消す文がありません。',true);return}
+  const i=cur.lastIndexOf('\n');
+  const next=i>=0?cur.slice(0,i):cur.replace(/[^。！？\n]*[。！？]?$/,'');
+  setOrig(next);
+  say('最後の一文を消しました。「戻す」で元に戻せます。');
+}
+function newline(){
+  const cur=$('orig').value;
+  if(cur&&!cur.endsWith('\n'))setOrig(cur+'\n');
+}
+
+function showTab(clean){
+  $('clean').hidden=!clean;$('removed').hidden=clean;
+  $('tabClean').setAttribute('aria-selected',String(clean));
+  $('tabRemoved').setAttribute('aria-selected',String(!clean));
+}
+$('tabClean').onclick=()=>showTab(true);
+$('tabRemoved').onclick=()=>showTab(false);
+
+async function copyFrom(id,label,fromVoice,okMsg){
+  if(id==='pOut'&&!$('pOut').value.trim())buildPrompt();
+  const t=$(id).value;
+  if(!t){say(label+'が空です。',true);return}
+  try{await navigator.clipboard.writeText(t);say(okMsg)}
+  catch(e){
+    const c=$(id);c.focus();c.select();
+    let ok=false;try{ok=document.execCommand('copy')}catch(_){}
+    say(ok?okMsg:(fromVoice?'声ではコピーできませんでした。コピーのボタンを押してください。':label+'を選んだ状態にしたので、手動でコピーしてください。'),!ok);
+  }
+}
+const copyOrig=(fv)=>copyFrom('orig','原文',fv,'原文をコピーしました。');
+const copyClean=(fv)=>copyFrom('clean','整理版',fv,'整理版をコピーしました。');
+const copyPoints=(fv)=>copyFrom('points','要点メモ',fv,'要点メモをコピーしました。');
+const copyPrompt=(fv)=>copyFrom('pOut','依頼文',fv,data.pmode==='b'?'依頼文をコピーしました。'+targetName()+' に貼り付けてください。':'依頼文をコピーしました。Claude のチャットに貼り付けてください。');
+$('btnCopyOrig').onclick=()=>copyOrig(false);
+$('btnCopyClean').onclick=()=>copyClean(false);
+$('btnCopyPoints').onclick=()=>copyPoints(false);
+$('btnCopyPrompt').onclick=()=>copyPrompt(false);
+
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec=null,listening=false,mode='off',restarts=[],actx=null;
+function beep(f){
+  try{
+    if(!actx)return;
+    const o=actx.createOscillator(),g=actx.createGain();
+    o.frequency.value=f;g.gain.value=0.08;o.connect(g);g.connect(actx.destination);
+    o.start();g.gain.exponentialRampToValueAtTime(0.0001,actx.currentTime+0.18);o.stop(actx.currentTime+0.2);
+  }catch(e){}
+}
+function ensureAudio(){try{if(!actx){const A=window.AudioContext||window.webkitAudioContext;if(A)actx=new A()}}catch(e){}}
+function setMode(m){
+  mode=m;
+  $('lamp').dataset.s=m;
+  $('lampText').textContent=m==='writing'?'書き取り中':m==='standby'?'待機中（「開始」で書き取り）':'マイク オフ';
+  $('btnMic').textContent=listening?'マイクを切る':'マイクを入れる';
+  $('btnMic').className=listening?'':'main';
+  $('btnWrite').textContent=m==='writing'?'書き取り停止':'書き取り開始';
+  $('btnWrite').className=m==='writing'?'rec':'';
+}
+function micOn(startMode){
+  ensureAudio();
+  if(!SR){say('この画面ではマイクが使えません。パソコンの Chrome で開くか、キーボードのマイクで原文に入力してください。',true);return}
+  if(!rec){
+    rec=new SR();
+    rec.lang='ja-JP';rec.continuous=true;rec.interimResults=true;rec.maxAlternatives=1;
+    rec.onresult=onResult;rec.onerror=onError;rec.onend=onEnd;
+  }
+  listening=true;
+  setMode(startMode||'standby');
+  try{rec.start()}catch(e){}
+}
+function micOff(){
+  listening=false;
+  setMode('off');
+  try{rec&&rec.stop()}catch(e){}
+}
+function onEnd(){
+  if(!listening){setMode('off');return}
+  const now=Date.now();
+  restarts=restarts.filter(t=>now-t<5000);restarts.push(now);
+  if(restarts.length>6){micOff();say('マイクのつなぎ直しが続けて失敗しました。もう一度「マイクを入れる」を押してください。',true);return}
+  setTimeout(()=>{if(listening){try{rec.start()}catch(e){}}},250);
+}
+function onError(e){
+  const er=e&&e.error;
+  if(er==='no-speech'||er==='aborted')return;
+  if(er==='not-allowed'||er==='service-not-allowed'){micOff();say('マイクが許可されていません。アドレスバーのマイクの印から「許可」にするか、キーボードのマイクで入力してください。',true);return}
+  if(er==='audio-capture'){micOff();say('マイクが見つかりません。マイクがつながっているか確かめてください。',true);return}
+  if(er==='network'){say('音声認識につながりません。インターネットの接続を確かめてください。自動でつなぎ直します。',true);return}
+}
+function onResult(ev){
+  let interim='';
+  for(let i=ev.resultIndex;i<ev.results.length;i++){
+    const r=ev.results[i];
+    if(r.isFinal){handleSegment(r[0].transcript)}else{interim+=r[0].transcript}
+  }
+  if(interim)$('heardText').textContent=interim;
+}
+function handleSegment(raw){
+  const s=norm(raw);
+  if(!s)return;
+  $('heardText').textContent=s;
+  processSeg(s,0);
+}
+function cmdList(){return data.cmds.filter(c=>norm(c.p)).map(c=>({p:norm(c.p),a:c.a})).sort((a,b)=>b.p.length-a.p.length)}
+function processSeg(s,depth){
+  s=norm(s);
+  if(!s||depth>4)return;
+  const cl=cmdList();
+  for(const c of cl){if(s===c.p){runAction(c.a);return}}
+  for(const c of cl){if(s.startsWith(c.p)){runAction(c.a);processSeg(s.slice(c.p.length),depth+1);return}}
+  for(const c of cl){if(s.endsWith(c.p)){writeSeg(s.slice(0,-c.p.length));runAction(c.a);return}}
+  writeSeg(s);
+}
+function writeSeg(t){t=norm(t);if(!t)return;if(mode==='writing')appendText(t)}
+function runAction(a){
+  if(a==='start'){if(!listening)micOn('writing');else setMode('writing');beep(880);say('書き取りを始めました。')}
+  else if(a==='stop'){if(listening)setMode('standby');beep(440);say('書き取りを止めました。マイクは待機中です。')}
+  else if(a==='newline'){newline()}
+  else if(a==='undo'){removeLast()}
+  else if(a==='back'){undo()}
+  else if(a==='redo'){redo()}
+  else if(a==='clean'){refresh();say('整理版を作り直しました。')}
+  else if(a==='copy'){copyClean(true)}
+  else if(a==='prompt'){copyPrompt(true)}
+}
+
+$('btnMic').onclick=()=>{listening?micOff():micOn('standby')};
+$('btnWrite').onclick=()=>{
+  ensureAudio();
+  if(mode==='writing')runAction('stop');
+  else if(!listening){micOn('writing');if(listening){beep(880);say('書き取りを始めました。')}}
+  else runAction('start');
+};
+$('btnBack').onclick=()=>undo();
+$('btnRedo').onclick=()=>redo();
+$('btnUndo').onclick=()=>removeLast();
+$('btnClear').onclick=function(){
+  if(this.dataset.armed){delete this.dataset.armed;this.textContent='全部消す';setOrig('');say('原文を消しました。「戻す」で元に戻せます。');return}
+  this.dataset.armed='1';this.textContent='本当に消す';
+  setTimeout(()=>{delete this.dataset.armed;this.textContent='全部消す'},4000);
+};
+$('btnRebuild').onclick=()=>{refresh();say('整理版を作り直しました。')};
+$('orig').addEventListener('input',()=>{sync();clearTimeout(recT);recT=setTimeout(recordNow,800)});
+$('optAuto').onchange=e=>{data.auto=e.target.checked;save();$('btnRebuild').hidden=data.auto;sync()};
+
+function topics(){const s=new Set(['会計']);for(const d of data.dict){if(d.t)s.add(d.t)}if(data.topic)s.add(data.topic);return [...s]}
+function renderTopics(){
+  const sel=$('topicSel');sel.innerHTML='';
+  const o0=document.createElement('option');o0.value='';o0.textContent='なし';sel.appendChild(o0);
+  for(const t of topics()){const o=document.createElement('option');o.value=t;o.textContent=t;sel.appendChild(o)}
+  sel.value=data.topic||'';
+}
+function loadMemo(){$('pMemo').value=data.memos[memoKey()]||''}
+$('topicSel').onchange=e=>{data.topic=e.target.value;save();loadMemo();sync()};
+function syncTarget(){$('pTarget').value=data.target;$('pOther').hidden=data.target!=='other';$('pOther').value=data.other||'';$('pMode').value=data.pmode}
+$('pTarget').onchange=e=>{data.target=e.target.value;save();syncTarget();buildPrompt()};
+$('pOther').addEventListener('input',e=>{data.other=e.target.value.trim();save();buildPrompt()});
+$('pMode').onchange=e=>{data.pmode=e.target.value;save();buildPrompt()};
+$('pMemo').addEventListener('input',e=>{data.memos[memoKey()]=e.target.value;save();buildPrompt()});
+$('clean').addEventListener('input',()=>{buildPrompt()});
+
+function mkInput(val,on){const i=document.createElement('input');i.type='text';i.value=val||'';i.addEventListener('change',()=>on(i.value.trim()));return i}
+function mkSelect(opts,val,on){const s=document.createElement('select');for(const [v,l] of opts){const o=document.createElement('option');o.value=v;o.textContent=l;s.appendChild(o)}s.value=val;s.addEventListener('change',()=>on(s.value));return s}
+function mkDel(onDel){
+  const b=document.createElement('button');b.type='button';b.className='small danger';b.textContent='削除';
+  b.onclick=()=>{if(b.dataset.armed){onDel()}else{b.dataset.armed='1';b.textContent='本当に削除';setTimeout(()=>{if(b.isConnected){delete b.dataset.armed;b.textContent='削除'}},4000)}};
+  return b;
+}
+function td(el){const c=document.createElement('td');c.appendChild(el);return c}
+function renderDict(){
+  const tb=$('dictBody');tb.innerHTML='';
+  data.dict.forEach((d,i)=>{
+    const tr=document.createElement('tr');
+    tr.appendChild(td(mkInput(d.w,v=>{d.w=v;save();sync()})));
+    tr.appendChild(td(mkInput(d.r,v=>{d.r=v;save();sync()})));
+    tr.appendChild(td(mkSelect(CATS.map(c=>[c,c]),d.c||CATS[0],v=>{d.c=v;save()})));
+    tr.appendChild(td(mkInput(d.t,v=>{d.t=v;save();renderTopics();sync()})));
+    tr.appendChild(td(mkDel(()=>{data.dict.splice(i,1);save();renderDict();renderTopics();sync()})));
+    tb.appendChild(tr);
+  });
+}
+function renderCmds(){
+  const tb=$('cmdBody');tb.innerHTML='';
+  const opts=Object.entries(ACTIONS);
+  data.cmds.forEach((c,i)=>{
+    const tr=document.createElement('tr');
+    tr.appendChild(td(mkInput(c.p,v=>{c.p=v;save()})));
+    tr.appendChild(td(mkSelect(opts,c.a,v=>{c.a=v;save()})));
+    tr.appendChild(td(mkDel(()=>{data.cmds.splice(i,1);save();renderCmds()})));
+    tb.appendChild(tr);
+  });
+}
+function renderFill(){
+  const tb=$('fillBody');tb.innerHTML='';
+  data.fillers.forEach((f,i)=>{
+    const tr=document.createElement('tr');
+    tr.appendChild(td(mkInput(f.w,v=>{f.w=v;save();sync()})));
+    const cb=document.createElement('input');cb.type='checkbox';cb.checked=!!f.any;cb.setAttribute('aria-label','区切りがなくても消す');cb.onchange=()=>{f.any=cb.checked;save();sync()};
+    tr.appendChild(td(cb));
+    tr.appendChild(td(mkDel(()=>{data.fillers.splice(i,1);save();renderFill();sync()})));
+    tb.appendChild(tr);
+  });
+}
+for(const [v,l] of CATS.map(c=>[c,c])){const o=document.createElement('option');o.value=v;o.textContent=l;$('dC').appendChild(o)}
+for(const [v,l] of Object.entries(ACTIONS)){const o=document.createElement('option');o.value=v;o.textContent=l;$('cA').appendChild(o)}
+$('dC').value='よくある誤変換';
+$('dAdd').onclick=()=>{
+  const w=$('dW').value.trim(),r=$('dR').value.trim();
+  if(!r){say('「正しい言葉」を入れてください。',true);return}
+  data.dict.push({w:w,r:r,c:$('dC').value,t:$('dT').value.trim()});
+  $('dW').value='';$('dR').value='';$('dT').value='';
+  save();renderDict();renderTopics();sync();say('辞書に追加しました。');
+};
+$('cAdd').onclick=()=>{
+  const p=$('cP').value.trim();
+  if(!p){say('合図の言葉を入れてください。',true);return}
+  if(data.cmds.some(c=>norm(c.p)===norm(p))){say('その言葉はもう登録されています。',true);return}
+  data.cmds.push({p:p,a:$('cA').value});$('cP').value='';save();renderCmds();say('声の合図を追加しました。');
+};
+$('fAdd').onclick=()=>{
+  const w=$('fW').value.trim();
+  if(!w){say('消す言葉を入れてください。',true);return}
+  if(data.fillers.some(f=>f.w===w)){say('その言葉はもう登録されています。',true);return}
+  data.fillers.push({w:w,any:$('fAny').checked});$('fW').value='';save();renderFill();sync();say('消す言葉を追加しました。');
+};
+
+function exportJson(){return JSON.stringify({app:'ボイス変換',version:VERSION,dict:data.dict,cmds:data.cmds,fillers:data.fillers,memos:data.memos},null,2)}
+$('xFile').onclick=()=>{
+  const j=exportJson();$('ioText').value=j;
+  try{
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([j],{type:'application/json'}));
+    const d=new Date();
+    a.download='ボイス変換_辞書_'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'.json';
+    document.body.appendChild(a);a.click();a.remove();
+    say('ファイルに書き出しました。保存されない場合は「書き出し内容をコピー」を使ってください。');
+  }catch(e){say('ファイルに書き出せませんでした。「書き出し内容をコピー」を使ってください。',true)}
+};
+$('xCopy').onclick=async()=>{
+  const j=exportJson();$('ioText').value=j;
+  try{await navigator.clipboard.writeText(j);say('書き出し内容をコピーしました。')}
+  catch(e){$('ioText').focus();$('ioText').select();say('内容を選んだ状態にしたので、手動でコピーしてください。',true)}
+};
+function importJson(text){
+  let d;
+  try{d=JSON.parse(text)}catch(e){say('読み込めませんでした。書き出した内容をそのまま貼り付けてください。',true);return}
+  let n=0;
+  for(const x of (d.dict||[])){if(x&&x.r!==undefined&&!data.dict.some(y=>y.w===x.w&&y.r===x.r&&(y.t||'')===(x.t||''))){data.dict.push({w:x.w||'',r:x.r||'',c:CATS.includes(x.c)?x.c:CATS[4],t:x.t||''});n++}}
+  for(const x of (d.cmds||[])){if(x&&x.p&&ACTIONS[x.a]&&!data.cmds.some(y=>norm(y.p)===norm(x.p))){data.cmds.push({p:x.p,a:x.a});n++}}
+  for(const x of (d.fillers||[])){if(x&&x.w&&!data.fillers.some(y=>y.w===x.w)){data.fillers.push({w:x.w,any:!!x.any});n++}}
+  if(d.memos&&typeof d.memos==='object'){for(const k of Object.keys(d.memos)){if(!data.memos[k]&&d.memos[k]){data.memos[k]=String(d.memos[k]);n++}}}
+  save();renderAll();loadMemo();sync();
+  say(n+'件を足しました。今の中身は消していません。');
+}
+$('iPaste').onclick=()=>importJson($('ioText').value);
+$('iFile').onchange=e=>{const f=e.target.files&&e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{importJson(String(r.result));e.target.value=''};r.readAsText(f)};
+
+function renderAll(){renderDict();renderCmds();renderFill();renderTopics()}
+renderAll();
+$('optAuto').checked=!!data.auto;
+$('btnRebuild').hidden=!!data.auto;
+syncTarget();
+loadMemo();
+setMode('off');
+refresh();
+if(!SR)say('この画面ではマイクが使えません。キーボードのマイクで原文に入力するか、文章を貼り付けてください。');
+})();
+</script>
+</body>
+</html>
