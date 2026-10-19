@@ -9,20 +9,21 @@
 <style>
 /* layout: top bar, four equal windows (2x2 on PC, stacked on phones), folded settings at the bottom */
 :root{
-  --bg:#f3f5f4;--panel:#ffffff;--ink:#1d2622;--muted:#5d6b65;--line:#d3dbd7;
+  --bg:#eceff0;--panel:#ffffff;--ink:#141b18;--muted:#56645e;--line:#c4cdc9;
   --accent:#1f6b5a;--accent-ink:#ffffff;--accent-soft:#e1efea;
   --rec:#c2410c;--rec-soft:#fbe7dc;--wait:#2f5f9e;--wait-soft:#e2ebf7;--warn:#9a3412;
+  --off:#6b7671;--off-ink:#ffffff;
   --f-display:"Zen Kaku Gothic Antique","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
   --f-body:"BIZ UDPGothic","Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#141a18;--panel:#1c2421;--ink:#e4ebe8;--muted:#9aa9a2;--line:#33403b;
   --accent:#4fb39a;--accent-ink:#0f1513;--accent-soft:#1e3a33;
-  --rec:#fb8a55;--rec-soft:#3d2418;--wait:#7aa7e6;--wait-soft:#1d2b40;--warn:#fdba8c;color-scheme:dark}}
+  --rec:#fb8a55;--rec-soft:#3d2418;--wait:#7aa7e6;--wait-soft:#1d2b40;--warn:#fdba8c;--off:#5b6661;--off-ink:#f1f5f3;color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#141a18;--panel:#1c2421;--ink:#e4ebe8;--muted:#9aa9a2;--line:#33403b;
   --accent:#4fb39a;--accent-ink:#0f1513;--accent-soft:#1e3a33;
-  --rec:#fb8a55;--rec-soft:#3d2418;--wait:#7aa7e6;--wait-soft:#1d2b40;--warn:#fdba8c;color-scheme:dark}
+  --rec:#fb8a55;--rec-soft:#3d2418;--wait:#7aa7e6;--wait-soft:#1d2b40;--warn:#fdba8c;--off:#5b6661;--off-ink:#f1f5f3;color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6;margin:0;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 button,select,input{font:inherit;color:inherit}
@@ -45,6 +46,14 @@ label.chk{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:va
 .lamp[data-s="standby"] i{background:var(--wait)}
 .lamp[data-s="writing"]{background:var(--rec-soft);color:var(--rec);border-color:transparent}
 .lamp[data-s="writing"] i{background:var(--rec);animation:pulse 1.2s infinite}
+.lamp[data-s="off"]{background:var(--off);color:var(--off-ink);border-color:transparent;font-size:15px;padding:6px 16px}
+.lamp[data-s="off"] i{background:var(--off-ink);opacity:.6}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:40;box-shadow:none;transition:box-shadow .2s}
+body[data-s="writing"]::after{box-shadow:inset 0 0 0 6px var(--rec)}
+body[data-s="standby"]::after{box-shadow:inset 0 0 0 3px var(--wait)}
+.meter{display:inline-block;width:64px;height:10px;border-radius:999px;background:var(--bg);border:1px solid var(--line);overflow:hidden}
+.meter[hidden]{display:none}
+.meter i{display:block;height:100%;width:0;background:var(--accent);transition:width .08s linear}
 @keyframes pulse{50%{opacity:.3}}
 @media (prefers-reduced-motion:reduce){.lamp i{animation:none!important}}
 .topic{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
@@ -105,8 +114,9 @@ kbd{font-family:var(--f-body);background:var(--accent-soft);padding:0 6px;border
 </head>
 <body>
 <header class="top">
-  <div class="brand">ボイス変換 <span class="ver" id="ver">v0.3.2</span></div>
-  <span class="lamp" id="lamp" data-s="off"><i></i><span id="lampText">マイク オフ</span></span>
+  <div class="brand">ボイス変換 <span class="ver" id="ver">v0.3.3</span></div>
+  <span class="lamp" id="lamp" data-s="off"><i></i><span id="lampText">マイクオフ</span></span>
+  <span class="meter" id="meter" title="マイクに入っている音の大きさ" hidden><i id="meterBar"></i></span>
   <button id="btnMic" class="main" type="button">マイクを入れる</button>
   <button id="btnWrite" type="button">書き取り開始</button>
   <button id="btnSet" type="button">設定</button>
@@ -257,8 +267,8 @@ kbd{font-family:var(--f-body);background:var(--accent-soft);padding:0 6px;border
 <div class="stab" data-tab="help" hidden>
 <h3>使い方</h3>
     <ol class="guide">
-      <li>パソコンの Chrome で開き、<kbd>マイクを入れる</kbd>を押します。初回はマイクの使用を「許可」してください。</li>
-      <li>「待機中」になったら、「開始」と言うと書き取りを始め、「以上」と言うと待機に戻ります。マイクは入ったままなので、別の画面を見ながら使えます。</li>
+      <li>パソコンの Chrome で開き、<kbd>マイクを入れる</kbd>を押すと、すぐに書き取りを始めます。初回はマイクの使用を「許可」してください。</li>
+      <li>「以上」と言うと待機中になり、「開始」と言うとまた書き始めます。マイクは入ったままなので、別の画面を見ながら使えます。</li>
       <li>原文は話した言葉が1回ごとに改行で入ります。整理版は、言い淀みを消して文章に整えたものです。「消したところ」タブで、消した言葉と言い換えた言葉を色で確かめられます。</li>
       <li>間違えたら<kbd>戻す</kbd>、戻しすぎたら<kbd>やり直す</kbd>。声で「戻して」と言っても戻せます。</li>
       <li>プロンプトは、渡す先を選んで<kbd>依頼文をコピー</kbd>を押し、Claude などのチャットに貼ります。アプリから直接は送りません。</li>
@@ -272,7 +282,7 @@ kbd{font-family:var(--f-body);background:var(--accent-soft);padding:0 6px;border
 
 <script>
 (function(){
-const VERSION='v0.3.2';
+const VERSION='v0.3.3';
 const KEY='voice-henkan-data';
 const CATS=['店名','人名','取引先','業界用語','よくある誤変換'];
 const ACTIONS={start:'書き取り開始',stop:'書き取り停止',newline:'改行',undo:'最後の一文を消す',back:'戻す',redo:'やり直す',clean:'整える',copy:'整理版をコピー',prompt:'プロンプト依頼文をコピー'};
@@ -477,7 +487,31 @@ $('btnCopyPoints').onclick=()=>copyPoints(false);
 $('btnCopyPrompt').onclick=()=>copyPrompt(false);
 
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-let rec=null,listening=false,mode='off',restarts=[],actx=null;
+let rec=null,listening=false,mode='off',restarts=[],actx=null,srStarted=false,startChk=null,mStream=null,mRaf=0;
+const MOBILE=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+function meterOn(){
+  if(MOBILE||mStream||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!actx)return;
+  navigator.mediaDevices.getUserMedia({audio:true}).then(st=>{
+    if(!listening){st.getTracks().forEach(t=>t.stop());return}
+    mStream=st;
+    const an=actx.createAnalyser();an.fftSize=512;
+    actx.createMediaStreamSource(st).connect(an);
+    const buf=new Uint8Array(an.fftSize);
+    $('meter').hidden=false;
+    const tick=()=>{
+      an.getByteTimeDomainData(buf);
+      let m=0;for(const v of buf){const d=Math.abs(v-128);if(d>m)m=d}
+      $('meterBar').style.width=Math.min(100,m/64*100)+'%';
+      mRaf=requestAnimationFrame(tick);
+    };
+    tick();
+  }).catch(()=>{});
+}
+function meterOff(){
+  cancelAnimationFrame(mRaf);mRaf=0;
+  if(mStream){mStream.getTracks().forEach(t=>t.stop());mStream=null}
+  $('meter').hidden=true;$('meterBar').style.width='0';
+}
 function beep(f){
   try{
     if(!actx)return;
@@ -490,7 +524,8 @@ function ensureAudio(){try{if(!actx){const A=window.AudioContext||window.webkitA
 function setMode(m){
   mode=m;
   $('lamp').dataset.s=m;
-  $('lampText').textContent=m==='writing'?'書き取り中':m==='standby'?'待機中（「開始」で書き取り）':'マイク オフ';
+  $('lampText').textContent=m==='writing'?'書き取り中':m==='standby'?'待機中（「開始」で書き取り）':'マイクオフ';
+  document.body.dataset.s=m;
   $('btnMic').textContent=listening?'マイクを切る':'マイクを入れる';
   $('btnMic').className=listening?'':'main';
   $('btnWrite').textContent=m==='writing'?'書き取り停止':'書き取り開始';
@@ -503,14 +538,21 @@ function micOn(startMode){
     rec=new SR();
     rec.lang='ja-JP';rec.continuous=true;rec.interimResults=true;rec.maxAlternatives=1;
     rec.onresult=onResult;rec.onerror=onError;rec.onend=onEnd;
+    rec.onstart=()=>{srStarted=true;clearTimeout(startChk)};
   }
-  listening=true;
+  listening=true;srStarted=false;
   setMode(startMode||'standby');
-  try{rec.start()}catch(e){}
+  if(actx&&actx.state==='suspended'){try{actx.resume()}catch(e){}}
+  try{rec.start()}catch(e){if(!(e&&e.name==='InvalidStateError')){say('マイクを始められませんでした（'+(e&&e.name||'不明')+'）。もう一度「マイクを入れる」を押してください。',true)}}
+  clearTimeout(startChk);
+  startChk=setTimeout(()=>{if(listening&&!srStarted)say('マイクが始まりません。アドレスバーのマイクの印で「許可」になっているか、ほかのアプリ（Windows キー＋H など）がマイクを使っていないか確かめてください。',true)},3000);
+  meterOn();
   armOff();
 }
 function micOff(){
   listening=false;
+  clearTimeout(startChk);
+  meterOff();
   clearOffTimers();
   setMode('off');
   try{rec&&rec.stop()}catch(e){}
@@ -528,6 +570,8 @@ function onError(e){
   if(er==='not-allowed'||er==='service-not-allowed'){micOff();say('マイクが許可されていません。アドレスバーのマイクの印から「許可」にするか、キーボードのマイクで入力してください。',true);return}
   if(er==='audio-capture'){micOff();say('マイクが見つかりません。マイクがつながっているか確かめてください。',true);return}
   if(er==='network'){say('音声認識につながりません。インターネットの接続を確かめてください。自動でつなぎ直します。',true);return}
+  if(er==='language-not-supported'){micOff();say('このブラウザでは日本語の音声認識が使えません。パソコンの Chrome で開いてください。',true);return}
+  say('音声認識でうまくいかないことがありました（'+(er||'不明')+'）。自動でつなぎ直します。直らないときは「マイクを切る」→「マイクを入れる」を押してください。',true);
 }
 function onResult(ev){
   touchSilence();
@@ -557,7 +601,7 @@ function processSeg(s,depth){
 function writeSeg(t){t=norm(t);if(!t)return;if(mode==='writing')appendText(t)}
 function runAction(a){
   if(a==='start'){if(!listening)micOn('writing');else setMode('writing');beep(880);say('書き取りを始めました。')}
-  else if(a==='stop'){if(listening)setMode('standby');beep(440);say('書き取りを止めました。マイクは待機中です。')}
+  else if(a==='stop'){if(listening)setMode('standby');beep(440);say('待機中です。「開始」と言うか「書き取り開始」を押すと原文に書きます。')}
   else if(a==='newline'){newline()}
   else if(a==='undo'){removeLast()}
   else if(a==='back'){undo()}
@@ -602,7 +646,11 @@ document.querySelectorAll('.settabs [data-set]').forEach(b=>{
   };
 });
 document.querySelectorAll('.stab').forEach(x=>{x.hidden=x.dataset.tab!=='dict'});
-$('btnMic').onclick=()=>{listening?micOff():micOn('standby')};
+$('btnMic').onclick=()=>{
+  if(listening){micOff();return}
+  micOn('writing');
+  if(listening){beep(880);say('書き取りを始めました。')}
+};
 $('btnWrite').onclick=()=>{
   ensureAudio();
   if(mode==='writing')runAction('stop');
