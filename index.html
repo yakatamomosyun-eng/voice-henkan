@@ -69,9 +69,16 @@ mark.rp{background:var(--accent-soft);color:var(--accent);border-radius:3px;font
 .foot{padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px));padding-block:4px}
 .note{margin-top:4px;padding:8px 12px;border-radius:8px;background:var(--wait-soft);font-size:14px}
 .note.bad{background:var(--rec-soft)}
-.settings{background:var(--panel);border-top:1px solid var(--line);padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px))}
-.settings summary{cursor:pointer;font-weight:700;padding-block:8px;list-style-position:inside}
-.settings-body{max-height:42dvh;overflow:auto;padding-bottom:12px}
+.setpanel{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:max(12px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) max(12px,env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px))}
+.setcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;width:min(900px,100%);max-height:100%;display:flex;flex-direction:column;padding:14px;gap:8px}
+.sethead{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sethead h2{margin:0;font-family:var(--f-display);font-size:17px}
+.settabs{overflow-x:auto;flex-wrap:nowrap;flex:0 0 auto}
+.settabs button{border-radius:6px 6px 0 0;border-bottom:3px solid transparent;white-space:nowrap}
+.settabs button[aria-selected="true"]{border-bottom-color:var(--accent);color:var(--accent)}
+.settings-body{overflow:auto;flex:1 1 auto;min-height:0;padding-bottom:12px}
+.stab[hidden]{display:none}
+.setpanel[hidden]{display:none!important}
 .settings h3{font-family:var(--f-display);font-size:15px;margin:16px 0 4px}
 .settings p{margin:0 0 8px;color:var(--muted);font-size:14px;max-width:70ch}
 .addrow{display:flex;flex-wrap:wrap;gap:8px;margin-block:8px;padding:10px;background:var(--accent-soft);border-radius:8px;align-items:center}
@@ -91,7 +98,6 @@ kbd{font-family:var(--f-body);background:var(--accent-soft);padding:0 6px;border
   .grid{flex:none;grid-template-columns:1fr;grid-template-rows:none}
   .win{min-height:340px}
   textarea,#removed{min-height:200px}
-  .settings-body{max-height:none}
   .topic{margin-left:0}
 }
 </style>
@@ -99,10 +105,11 @@ kbd{font-family:var(--f-body);background:var(--accent-soft);padding:0 6px;border
 </head>
 <body>
 <header class="top">
-  <div class="brand">ボイス変換 <span class="ver" id="ver">v0.3.0</span></div>
+  <div class="brand">ボイス変換 <span class="ver" id="ver">v0.3.2</span></div>
   <span class="lamp" id="lamp" data-s="off"><i></i><span id="lampText">マイク オフ</span></span>
   <button id="btnMic" class="main" type="button">マイクを入れる</button>
   <button id="btnWrite" type="button">書き取り開始</button>
+  <button id="btnSet" type="button">設定</button>
   <label class="topic" for="topicSel">話題 <select id="topicSel"></select></label>
 </header>
 
@@ -170,12 +177,20 @@ kbd{font-family:var(--f-body);background:var(--accent-soft);padding:0 6px;border
   <div class="note" id="msg" role="status" hidden></div>
 </footer>
 
-<details class="settings" id="settings">
-  <summary>設定（辞書・声の合図・消す言葉・書き出し・使い方）</summary>
-  <div class="settings-body">
-    <label class="chk"><input type="checkbox" id="optAuto"> 自動で整える（オフのときは「整理版を作り直す」を押します）</label>
-
-    <h3>用語辞書</h3>
+<div class="setpanel" id="setPanel" hidden>
+<div class="setcard" role="dialog" aria-modal="true" aria-label="設定">
+<div class="sethead"><h2>設定</h2><button id="setClose" type="button">閉じる</button></div>
+<div class="tabs2 settabs" role="tablist">
+<button role="tab" type="button" data-set="dict" aria-selected="true" class="small">辞書</button>
+<button role="tab" type="button" data-set="cmd" aria-selected="false" class="small">声の合図</button>
+<button role="tab" type="button" data-set="fill" aria-selected="false" class="small">消す言葉</button>
+<button role="tab" type="button" data-set="mic" aria-selected="false" class="small">マイク</button>
+<button role="tab" type="button" data-set="io" aria-selected="false" class="small">書き出し</button>
+<button role="tab" type="button" data-set="help" aria-selected="false" class="small">使い方</button>
+</div>
+<div class="settings-body">
+<div class="stab" data-tab="dict">
+<h3>用語辞書</h3>
     <p>「まちがい」に話したときに出る言葉、「正しい言葉」に直したい表記を入れます。まちがいは「、」で区切って何個でも書けます。話題を入れた言葉は、その話題を選んだときだけ置き換えます。</p>
     <div class="addrow">
       <input type="text" id="dW" placeholder="まちがい（例：突き出し）" aria-label="まちがい">
@@ -186,7 +201,9 @@ kbd{font-family:var(--f-body);background:var(--accent-soft);padding:0 6px;border
     </div>
     <div class="tbl"><table><thead><tr><th>まちがい</th><th>正しい言葉</th><th>分類</th><th>話題</th><th></th></tr></thead><tbody id="dictBody"></tbody></table></div>
 
-    <h3>声の合図</h3>
+    </div>
+<div class="stab" data-tab="cmd" hidden>
+<h3>声の合図</h3>
     <p>マイクを入れている間、ここに登録した言葉を言うと動作します。合図の言葉は原文に書きません。</p>
     <div class="addrow">
       <input type="text" id="cP" placeholder="言葉（例：書き取り終了）" aria-label="言葉">
@@ -195,7 +212,10 @@ kbd{font-family:var(--f-body);background:var(--accent-soft);padding:0 6px;border
     </div>
     <div class="tbl"><table><thead><tr><th>言葉</th><th>動作</th><th></th></tr></thead><tbody id="cmdBody"></tbody></table></div>
 
-    <h3>消す言葉</h3>
+    </div>
+<div class="stab" data-tab="fill" hidden>
+<label class="chk"><input type="checkbox" id="optAuto"> 自動で整える（オフのときは「整理版を作り直す」を押します）</label>
+<h3>消す言葉</h3>
     <p>整理版を作るときに消す言葉です。「区切りがなくても消す」をオフの言葉は、後ろに「、」や区切りがあるときだけ消します（「そのため」「あの店」などを消さないため）。</p>
     <div class="addrow">
       <input type="text" id="fW" placeholder="消す言葉（例：ええっと）" aria-label="消す言葉">
@@ -204,7 +224,24 @@ kbd{font-family:var(--f-body);background:var(--accent-soft);padding:0 6px;border
     </div>
     <div class="tbl"><table><thead><tr><th>消す言葉</th><th>区切りがなくても消す</th><th></th></tr></thead><tbody id="fillBody"></tbody></table></div>
 
-    <h3>書き出し・読み込み</h3>
+    </div>
+<div class="stab" data-tab="mic" hidden>
+<h3>マイクの自動オフ</h3>
+<p>マイクが勝手に切れないように、切るタイミングを選べます。「切らない」を選ぶと、ずっと入ったままになります。</p>
+<div class="addrow"><label for="autoOff">切るタイミング</label>
+<select id="autoOff" aria-label="マイクの自動オフ">
+<option value="never">切らない</option>
+<option value="t1">1分後に切る</option>
+<option value="t2">2分後に切る</option>
+<option value="t5">5分後に切る</option>
+<option value="s1">無音が1分続いたら切る</option>
+<option value="s2">無音が2分続いたら切る</option>
+<option value="s5">無音が5分続いたら切る</option>
+</select></div>
+<p id="offNote"></p>
+</div>
+<div class="stab" data-tab="io" hidden>
+<h3>書き出し・読み込み</h3>
     <p>辞書・声の合図・消す言葉・話題メモは、このブラウザの中に自動で保存されます。別の端末へ移すときは、ここで書き出して移した先で読み込みます。読み込みは今の中身に足すだけで、何も消しません。</p>
     <div class="wtools">
       <button id="xFile" class="main small" type="button">ファイルに書き出す</button>
@@ -216,7 +253,9 @@ kbd{font-family:var(--f-body);background:var(--accent-soft);padding:0 6px;border
       <div class="wtools"><button id="iPaste" class="small" type="button">貼り付けた内容を読み込む</button></div>
     </div>
 
-    <h3>使い方</h3>
+    </div>
+<div class="stab" data-tab="help" hidden>
+<h3>使い方</h3>
     <ol class="guide">
       <li>パソコンの Chrome で開き、<kbd>マイクを入れる</kbd>を押します。初回はマイクの使用を「許可」してください。</li>
       <li>「待機中」になったら、「開始」と言うと書き取りを始め、「以上」と言うと待機に戻ります。マイクは入ったままなので、別の画面を見ながら使えます。</li>
@@ -227,26 +266,29 @@ kbd{font-family:var(--f-body);background:var(--accent-soft);padding:0 6px;border
       <li>声で本人を見分けることはできないため、周りの人の声も拾います。話した声は Chrome の音声認識（Google）に送られて文字になります。</li>
     </ol>
   </div>
-</details>
+</div>
+</div>
+</div>
 
 <script>
 (function(){
-const VERSION='v0.3.0';
+const VERSION='v0.3.2';
 const KEY='voice-henkan-data';
 const CATS=['店名','人名','取引先','業界用語','よくある誤変換'];
 const ACTIONS={start:'書き取り開始',stop:'書き取り停止',newline:'改行',undo:'最後の一文を消す',back:'戻す',redo:'やり直す',clean:'整える',copy:'整理版をコピー',prompt:'プロンプト依頼文をコピー'};
 const FILL_ANY=['えーっと','えっと','えーと','ええと','うーん','あのー','えー','えへん','ごほん','ゴホッ','ゴホン','ゲホ','ケホ','くしゅん','はくしょん','ハクション','ハークション','ふぅ','ふー'];
-const FILL_WORD=['あの','まあ','なんか','その'];
+const FILL_WORD=['あの','まあ','なんか','その','うん','あ','で'];
 const CMD_DEFAULT=[{p:'開始',a:'start'},{p:'以上',a:'stop'},{p:'改行',a:'newline'},{p:'今のは消して',a:'undo'},{p:'整理して',a:'clean'},{p:'プロンプトにして',a:'prompt'},{p:'戻して',a:'back'},{p:'やり直して',a:'redo'}];
 const DEFAULTS={
   dict:[
     {w:'突き出し、突出し',r:'付きだし',c:'業界用語',t:''},
     {w:'適応',r:'摘要',c:'よくある誤変換',t:'会計'},
-    {w:'うまいもんや福田店、うまいもん屋福田店、旨いもん家福田店、うまいもんや 福田店',r:'うまいもん家 福田店',c:'店名',t:''}
+    {w:'うまいもんや福田店、うまいもん屋福田店、旨いもん家福田店、うまいもんや 福田店',r:'うまいもん家 福田店',c:'店名',t:''},
+    {w:'返還',r:'変換',c:'よくある誤変換',t:''}
   ],
   cmds:CMD_DEFAULT,
   fillers:FILL_ANY.map(w=>({w:w,any:true})).concat(FILL_WORD.map(w=>({w:w,any:false}))),
-  topic:'',auto:true,target:'Claude',other:'',pmode:'a',memos:{}
+  topic:'',auto:true,autoOff:'never',target:'Claude',other:'',pmode:'a',memos:{}
 };
 const $=id=>document.getElementById(id);
 const clone=x=>JSON.parse(JSON.stringify(x));
@@ -263,6 +305,12 @@ function load(){
     for(const f of base.fillers){if(!d.fillers.some(x=>x.w===f.w))d.fillers.push(f)}
     for(const c of base.cmds){if(!d.cmds.some(x=>norm(x.p)===c.p))d.cmds.push(c)}
     d.v3=true;
+  }
+  if(!d.v4){
+    for(const f of base.fillers){if(!d.fillers.some(x=>x.w===f.w))d.fillers.push(f)}
+    if(!d.dict.some(x=>x.w==='返還'))d.dict.push({w:'返還',r:'変換',c:'よくある誤変換',t:''});
+    if(!d.autoOff)d.autoOff='never';
+    d.v4=true;
   }
   return d;
 }
@@ -459,9 +507,11 @@ function micOn(startMode){
   listening=true;
   setMode(startMode||'standby');
   try{rec.start()}catch(e){}
+  armOff();
 }
 function micOff(){
   listening=false;
+  clearOffTimers();
   setMode('off');
   try{rec&&rec.stop()}catch(e){}
 }
@@ -480,6 +530,7 @@ function onError(e){
   if(er==='network'){say('音声認識につながりません。インターネットの接続を確かめてください。自動でつなぎ直します。',true);return}
 }
 function onResult(ev){
+  touchSilence();
   let interim='';
   for(let i=ev.resultIndex;i<ev.results.length;i++){
     const r=ev.results[i];
@@ -516,6 +567,41 @@ function runAction(a){
   else if(a==='prompt'){copyPrompt(true)}
 }
 
+let offTotalT=null,offSilT=null;
+const OFF_OPTS={never:null,t1:['total',1],t2:['total',2],t5:['total',5],s1:['silence',1],s2:['silence',2],s5:['silence',5]};
+const OFF_LABEL={never:'切らない',t1:'1分後に切る',t2:'2分後に切る',t5:'5分後に切る',s1:'無音が1分続いたら切る',s2:'無音が2分続いたら切る',s5:'無音が5分続いたら切る'};
+function clearOffTimers(){clearTimeout(offTotalT);clearTimeout(offSilT);offTotalT=null;offSilT=null}
+function armOff(){
+  clearOffTimers();
+  const o=OFF_OPTS[data.autoOff||'never'];
+  if(!o||!listening)return;
+  const ms=o[1]*60000;
+  if(o[0]==='total'){offTotalT=setTimeout(()=>{micOff();say('設定の時間になったので、マイクを切りました。')},ms)}
+  else{offSilT=setTimeout(()=>{micOff();say('無音が続いたので、マイクを切りました。')},ms)}
+}
+function touchSilence(){
+  const o=OFF_OPTS[data.autoOff||'never'];
+  if(listening&&o&&o[0]==='silence')armOff();
+}
+function showOffNote(){$('offNote').textContent='今の設定：'+(OFF_LABEL[data.autoOff||'never']||'切らない')+'。マイクを入れている間だけ、この設定が効きます。'}
+$('autoOff').value=data.autoOff||'never';
+showOffNote();
+$('autoOff').onchange=e=>{data.autoOff=e.target.value;save();showOffNote();if(listening)armOff();say('マイクの設定を変えました：'+OFF_LABEL[data.autoOff]+'。')};
+
+function openSet(){$('setPanel').hidden=false;$('setClose').focus()}
+function closeSet(){$('setPanel').hidden=true;$('btnSet').focus()}
+$('btnSet').onclick=openSet;
+$('setClose').onclick=closeSet;
+$('setPanel').addEventListener('click',e=>{if(e.target===$('setPanel'))closeSet()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('setPanel').hidden)closeSet()});
+document.querySelectorAll('.settabs [data-set]').forEach(b=>{
+  b.onclick=()=>{
+    const k=b.dataset.set;
+    document.querySelectorAll('.settabs [data-set]').forEach(x=>x.setAttribute('aria-selected',String(x===b)));
+    document.querySelectorAll('.stab').forEach(x=>{x.hidden=x.dataset.tab!==k});
+  };
+});
+document.querySelectorAll('.stab').forEach(x=>{x.hidden=x.dataset.tab!=='dict'});
 $('btnMic').onclick=()=>{listening?micOff():micOn('standby')};
 $('btnWrite').onclick=()=>{
   ensureAudio();
